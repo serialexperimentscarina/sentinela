@@ -1,7 +1,8 @@
-#ifndef WATCHLIST_H
-#define WATCHLIST_H
+#pragma once
+#include <string>
+#include <vector>
 
-static const char *watchlist[9] = {
+const std::vector<std::string> watchlist = {
     "/etc/",
     "/bin/",
     "/usr/bin/",
@@ -11,5 +12,3 @@ static const char *watchlist[9] = {
     "/usr/lib/",
     "/usr/include/",
     "/boot/"};
-
-#endif
