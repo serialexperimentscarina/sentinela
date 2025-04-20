@@ -6,22 +6,27 @@
 #include <dirent.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
+#include <nlohmann/json.hpp>
 #include "watchlist.hpp"
+
+using namespace std;
+using json = nlohmann::json; // For JSON file serialization/deserialization
 
 #define BUFFER_SIZE 4096 // Page size (4KB)
 
 // Generate hash for a file
-void generateChecksum(const std::string &path)
+string generateChecksum(const string &path)
 {
-  std::cout << path.c_str() << std::endl;
+  cout << path.c_str() << endl;
 
   FILE *fp;
   const EVP_MD *md;
   EVP_MD_CTX *mdctx;
   unsigned char hash[EVP_MAX_MD_SIZE];
   unsigned int hashLength;
-  std::vector<unsigned char> buffer(BUFFER_SIZE);
+  vector<unsigned char> buffer(BUFFER_SIZE);
   size_t bytes;
+  string finalHash;
 
   fp = fopen(path.c_str(), "rb");
   md = EVP_get_digestbyname("sha256");
@@ -39,14 +44,16 @@ void generateChecksum(const std::string &path)
 
   for (int i = 0; i < hashLength; ++i)
   {
-    printf("%02x", hash[i]);
+    char tmp[3];
+    snprintf(tmp, sizeof(tmp), "%02x", hash[i]);
+    finalHash += tmp;
   }
 
-  printf("\n");
+  return finalHash;
 }
 
 // Recursive directory traversal
-void directoryTraversal(const std::string &path)
+void directoryTraversal(const string &path, json &output)
 {
   DIR *dir;
   struct dirent *dirent;
@@ -57,7 +64,7 @@ void directoryTraversal(const std::string &path)
   // Read directory
   while ((dirent = readdir(dir)) != nullptr)
   {
-    std::string currPath;
+    string currPath;
     currPath = path + "/" + dirent->d_name;
 
     if (dirent->d_type == DT_DIR)
@@ -66,28 +73,31 @@ void directoryTraversal(const std::string &path)
       if (strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0)
         continue;
 
-      // Generate hash
-      generateChecksum(currPath);
-
       // Go inside this directory, list its contents as well
-      directoryTraversal(currPath);
+      directoryTraversal(currPath, output);
     }
-    else
-    {
-      // Generate hash
-      generateChecksum(currPath);
-    }
+
+    // Generate hash
+    string hash = generateChecksum(currPath);
+    output.push_back({{"path", currPath},
+                      {"hash", hash}});
   }
   closedir(dir);
 }
 
 int main()
 {
+  json hashFile = json::array();
+
   // for (const auto &directory : watchlist)
   //{
   //   directoryTraversal(directory);
   // }
-  directoryTraversal(".");
+  directoryTraversal(".", hashFile);
+
+  ofstream outFile("hashes.json");
+  outFile << std::setw(4) << hashFile << endl;
+  outFile.close();
 
   return (0);
 }
