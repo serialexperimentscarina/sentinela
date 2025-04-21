@@ -17,8 +17,6 @@ using json = nlohmann::json; // For JSON file serialization/deserialization
 // Generate hash for a file
 string generateChecksum(const string &path)
 {
-  cout << path.c_str() << endl;
-
   FILE *fp;
   const EVP_MD *md;
   EVP_MD_CTX *mdctx;
@@ -85,7 +83,8 @@ void directoryTraversal(const string &path, json &output)
   closedir(dir);
 }
 
-int main()
+// Generation of initial hash database
+void initialSetup()
 {
   json hashFile = json::array();
 
@@ -93,11 +92,15 @@ int main()
   //{
   //   directoryTraversal(directory);
   // }
-  directoryTraversal(".", hashFile);
+  directoryTraversal("..", hashFile);
 
   ofstream outFile("hashes.json");
   outFile << setw(4) << hashFile << endl;
   outFile.close();
+}
 
+int main()
+{
+  initialSetup();
   return (0);
 }
