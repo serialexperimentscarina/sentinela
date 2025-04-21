@@ -96,7 +96,7 @@ void initialSetup()
   //{
   //   directoryTraversal(directory);
   // }
-  directoryTraversal("/home/userlinux/", hashFile);
+  directoryTraversal("/home/userlinux/sentinela/src/", hashFile);
 
   ofstream outFile("/home/userlinux/hashes.json");
   outFile << setw(4) << hashFile << endl;
@@ -140,6 +140,7 @@ void initializeDaemon()
 
 void monitor()
 {
+  // TODO: sleep on first execution so the first daemon has time to hash all files it needs to
   ofstream log("/tmp/sentinela.log", ios::app);
   while (true)
   {
