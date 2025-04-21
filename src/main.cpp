@@ -3,7 +3,11 @@
 #include <cstring>
 #include <vector>
 #include <cstddef>
+#include <cstdlib>
 #include <dirent.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <nlohmann/json.hpp>
@@ -92,15 +96,56 @@ void initialSetup()
   //{
   //   directoryTraversal(directory);
   // }
-  directoryTraversal("..", hashFile);
+  directoryTraversal("/home/userlinux/", hashFile);
 
-  ofstream outFile("hashes.json");
+  ofstream outFile("/home/userlinux/hashes.json");
   outFile << setw(4) << hashFile << endl;
   outFile.close();
 }
 
+void initializeDaemon()
+{
+  pid_t pid;
+
+  // First fork
+  pid = fork();
+
+  if (pid < 0)
+    exit(EXIT_FAILURE);
+
+  if (pid > 0)
+    exit(EXIT_SUCCESS);
+
+  if (setsid() < 0)
+    exit(EXIT_FAILURE);
+
+  // Second fork
+  pid = fork();
+
+  if (pid < 0)
+    exit(EXIT_FAILURE);
+
+  if (pid > 0)
+    exit(EXIT_SUCCESS);
+
+  umask(0);
+  chdir("/");
+
+  int x;
+  for (x = sysconf(_SC_OPEN_MAX); x >= 0; x--)
+  {
+    close(x);
+  }
+}
+
 int main()
 {
-  initialSetup();
+  pid_t pidA = fork();
+  if (pidA == 0)
+  {
+    initializeDaemon();
+    initialSetup();
+  }
+
   return (0);
 }
