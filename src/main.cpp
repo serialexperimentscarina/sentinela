@@ -96,7 +96,7 @@ int main()
   directoryTraversal(".", hashFile);
 
   ofstream outFile("hashes.json");
-  outFile << std::setw(4) << hashFile << endl;
+  outFile << setw(4) << hashFile << endl;
   outFile.close();
 
   return (0);
