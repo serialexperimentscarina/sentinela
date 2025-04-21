@@ -138,13 +138,34 @@ void initializeDaemon()
   }
 }
 
+void monitor()
+{
+  ofstream log("/tmp/sentinela.log", ios::app);
+  while (true)
+  {
+    time_t now = time(nullptr);
+    log << ctime(&now);
+    log.flush();
+    sleep(60); // sleep for a minute
+  }
+}
+
 int main()
 {
-  pid_t pidA = fork();
-  if (pidA == 0)
+  pid_t pidSetup = fork();
+  if (pidSetup == 0)
   {
     initializeDaemon();
     initialSetup();
+    exit(EXIT_SUCCESS);
+  }
+
+  pid_t pidMonitor = fork();
+  if (pidMonitor == 0)
+  {
+    initializeDaemon();
+    monitor();
+    exit(EXIT_SUCCESS);
   }
 
   return (0);
