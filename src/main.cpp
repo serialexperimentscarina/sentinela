@@ -157,7 +157,19 @@ void monitor()
       string path = item["path"];
       string hash = item["hash"];
 
-      log << "path: " << path << ", hash: " << hash << ", at: " << ctime(&now);
+      // Regenerate hash
+      string currHash = generateChecksum(path);
+
+      // Compare hashes
+      if (hash == currHash)
+      {
+        log << "path: " << path << " (hashes are the same) , at: " << ctime(&now);
+      }
+      else
+      {
+        log << "path: " << path << " (HASHES ARE DIFFERENT) , at: " << ctime(&now);
+      }
+
       log.flush();
     }
   }
