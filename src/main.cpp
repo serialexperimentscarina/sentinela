@@ -140,14 +140,26 @@ void initializeDaemon()
 
 void monitor()
 {
-  // TODO: sleep on first execution so the first daemon has time to hash all files it needs to
+  // TODO: longer sleep on first execution so the first daemon has time to hash all files it needs to
   ofstream log("/tmp/sentinela.log", ios::app);
   while (true)
   {
+    sleep(60); // Sleep for a minute
+
+    ifstream inFile("/home/userlinux/hashes.json");
+    json input;
+    inFile >> input;
     time_t now = time(nullptr);
-    log << ctime(&now);
-    log.flush();
-    sleep(60); // sleep for a minute
+
+    // Interate through each path on the JSON
+    for (const auto &item : input)
+    {
+      string path = item["path"];
+      string hash = item["hash"];
+
+      log << "path: " << path << ", hash: " << hash << ", at: " << ctime(&now);
+      log.flush();
+    }
   }
 }
 
