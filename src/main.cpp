@@ -10,15 +10,54 @@
 #include <sys/stat.h>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
+#include <openssl/rand.h>
 #include <nlohmann/json.hpp>
 #include "watchlist.hpp"
 
 using namespace std;
-using json = nlohmann::json; // For JSON file serialization/deserialization
+using json = nlohmann::json; // for JSON file serialization/deserialization
 
-#define BUFFER_SIZE 4096 // Page size (4KB)
+#define BUFFER_SIZE 4096 // page size (4KB)
+#define BLOCK_SIZE 16    // block size for AES-GCM (16 bytes = 128 bits)
 
-// Generate hash for a file
+// encrypt and save JSON file
+void encryptJSON(const json &jsonFile, const vector<unsigned char> &key, const vector<unsigned char> &iv, vector<unsigned char> &tag)
+{
+  const EVP_CIPHER *cipher;
+  EVP_CIPHER_CTX *cipherctx;
+  int cipherLength, totalCipherLength = 0;
+
+  string jsonText = jsonFile.dump();
+  const unsigned char *jsonData = reinterpret_cast<const unsigned char *>(jsonText.data());
+  int jsonLength = static_cast<int>(jsonText.size());
+
+  // initialize encryption
+  cipher = EVP_aes_256_gcm();
+  cipherctx = EVP_CIPHER_CTX_new();
+
+  EVP_EncryptInit_ex(cipherctx, cipher, NULL, NULL, NULL);
+  EVP_CIPHER_CTX_ctrl(cipherctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), NULL);
+  EVP_EncryptInit_ex(cipherctx, NULL, NULL, key.data(), iv.data());
+
+  // encrypt
+  vector<unsigned char> cipherText(jsonLength + BLOCK_SIZE);
+  EVP_EncryptUpdate(cipherctx, cipherText.data(), &cipherLength, jsonData, jsonLength);
+  totalCipherLength += cipherLength;
+  EVP_EncryptFinal_ex(cipherctx, cipherText.data() + cipherLength, &cipherLength);
+  totalCipherLength += cipherLength;
+
+  // wite to file
+  ofstream out("/tmp/hash.enc", ios::binary);
+  out.write(reinterpret_cast<char *>(cipherText.data()), totalCipherLength);
+
+  // save tag
+  EVP_CIPHER_CTX_ctrl(cipherctx, EVP_CTRL_GCM_GET_TAG, BLOCK_SIZE, tag.data());
+
+  // free context
+  EVP_CIPHER_CTX_free(cipherctx);
+}
+
+// generate hash for a file
 string generateChecksum(const string &path)
 {
   FILE *fp;
@@ -30,20 +69,24 @@ string generateChecksum(const string &path)
   size_t bytes;
   string finalHash;
 
+  // open file and context
   fp = fopen(path.c_str(), "rb");
   md = EVP_get_digestbyname("sha256");
   mdctx = EVP_MD_CTX_new();
   EVP_DigestInit_ex(mdctx, md, NULL);
 
+  // hash
   while ((bytes = fread(buffer.data(), 1, BUFFER_SIZE, fp)) > 0)
   {
     EVP_DigestUpdate(mdctx, buffer.data(), bytes);
   }
 
+  // close file and free context
   fclose(fp);
   EVP_DigestFinal_ex(mdctx, hash, &hashLength);
   EVP_MD_CTX_free(mdctx);
 
+  // write to finalHash
   for (int i = 0; i < hashLength; ++i)
   {
     char tmp[3];
@@ -54,7 +97,7 @@ string generateChecksum(const string &path)
   return finalHash;
 }
 
-// Recursive directory traversal
+// recursive directory traversal
 void directoryTraversal(const string &path, json &output)
 {
   DIR *dir;
@@ -63,7 +106,7 @@ void directoryTraversal(const string &path, json &output)
   if (!(dir = opendir(path.c_str())))
     return;
 
-  // Read directory
+  // read directory
   while ((dirent = readdir(dir)) != nullptr)
   {
     string currPath;
@@ -71,15 +114,15 @@ void directoryTraversal(const string &path, json &output)
 
     if (dirent->d_type == DT_DIR)
     {
-      // Skip '.' and '..'
+      // skip '.' and '..'
       if (strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0)
         continue;
 
-      // Go inside this directory, list its contents as well
+      // go inside this directory, list its contents as well
       directoryTraversal(currPath, output);
     }
 
-    // Generate hash
+    // generate hash
     string hash = generateChecksum(currPath);
     output.push_back({{"path", currPath},
                       {"hash", hash}});
@@ -87,8 +130,8 @@ void directoryTraversal(const string &path, json &output)
   closedir(dir);
 }
 
-// Generation of initial hash database
-void initialSetup()
+// generation of initial hash database
+void initialSetup(const vector<unsigned char> &key, const vector<unsigned char> &iv, vector<unsigned char> &tag)
 {
   json hashFile = json::array();
 
@@ -98,16 +141,15 @@ void initialSetup()
   // }
   directoryTraversal("/home/userlinux/sentinela/src/", hashFile);
 
-  ofstream outFile("/home/userlinux/hashes.json");
-  outFile << setw(4) << hashFile << endl;
-  outFile.close();
+  // encrypt and save JSON
+  encryptJSON(hashFile, key, iv, tag);
 }
 
 void initializeDaemon()
 {
   pid_t pid;
 
-  // First fork
+  // first fork
   pid = fork();
 
   if (pid < 0)
@@ -119,7 +161,7 @@ void initializeDaemon()
   if (setsid() < 0)
     exit(EXIT_FAILURE);
 
-  // Second fork
+  // second fork
   pid = fork();
 
   if (pid < 0)
@@ -144,23 +186,23 @@ void monitor()
   ofstream log("/tmp/sentinela.log", ios::app);
   while (true)
   {
-    sleep(60); // Sleep for a minute
+    sleep(60); // sleep for a minute
 
     ifstream inFile("/home/userlinux/hashes.json");
     json input;
     inFile >> input;
     time_t now = time(nullptr);
 
-    // Interate through each path on the JSON
+    // interate through each path on the JSON
     for (const auto &item : input)
     {
       string path = item["path"];
       string hash = item["hash"];
 
-      // Regenerate hash
+      // regenerate hash
       string currHash = generateChecksum(path);
 
-      // Compare hashes
+      // compare hashes
       if (hash == currHash)
       {
         log << "path: " << path << " (hashes are the same) , at: " << ctime(&now);
@@ -177,21 +219,29 @@ void monitor()
 
 int main()
 {
+  vector<unsigned char> key(32); // key for encryption (32 bytes = 256 bits for AES-256)
+  vector<unsigned char> iv(12);  // iv for encryption (12 bytes = 96 bits for AES-GCM)
+  vector<unsigned char> tag(16); // tag for encryption (16 bytes = 128 bits for AES-GCM)
+
+  // randomize key and iv
+  RAND_bytes(key.data(), key.size());
+  RAND_bytes(iv.data(), iv.size());
+
   pid_t pidSetup = fork();
   if (pidSetup == 0)
   {
     initializeDaemon();
-    initialSetup();
+    initialSetup(key, iv, tag);
     exit(EXIT_SUCCESS);
   }
 
-  pid_t pidMonitor = fork();
-  if (pidMonitor == 0)
-  {
-    initializeDaemon();
-    monitor();
-    exit(EXIT_SUCCESS);
-  }
+  // pid_t pidMonitor = fork();
+  // if (pidMonitor == 0)
+  //{
+  //   initializeDaemon();
+  //   monitor();
+  //   exit(EXIT_SUCCESS);
+  // }
 
   return (0);
 }
