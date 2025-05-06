@@ -47,13 +47,53 @@ void encryptJSON(const json &jsonFile, const vector<unsigned char> &key, const v
   totalCipherLength += cipherLength;
 
   // wite to file
-  ofstream out("/tmp/hash.enc", ios::binary);
+  ofstream out("/home/userlinux/hashes.enc", ios::binary);
   out.write(reinterpret_cast<char *>(cipherText.data()), totalCipherLength);
 
   // save tag
   EVP_CIPHER_CTX_ctrl(cipherctx, EVP_CTRL_GCM_GET_TAG, BLOCK_SIZE, tag.data());
 
   // free context
+  EVP_CIPHER_CTX_free(cipherctx);
+}
+
+// decrypt JSON & save contents to a temporary file
+void decryptJSON(const vector<unsigned char> &key, const vector<unsigned char> &iv, const vector<unsigned char> &tag)
+{
+  const EVP_CIPHER *cipher;
+  EVP_CIPHER_CTX *cipherctx;
+
+  // initialize decryption
+  cipher = EVP_aes_256_gcm();
+  cipherctx = EVP_CIPHER_CTX_new();
+
+  EVP_DecryptInit_ex(cipherctx, cipher, NULL, NULL, NULL);
+  EVP_CIPHER_CTX_ctrl(cipherctx, EVP_CTRL_GCM_SET_IVLEN, iv.size(), NULL);
+  EVP_DecryptInit_ex(cipherctx, NULL, NULL, key.data(), iv.data());
+
+  vector<unsigned char> buffer(BUFFER_SIZE);
+  vector<unsigned char> decrypt(BUFFER_SIZE + 16);
+  int outLength, inLength;
+
+  // open encrypted file
+  ifstream in("/home/userlinux/hashes.enc", ios::binary);
+
+  // open temporary decrypted file for reading
+  ofstream out("/tmp/hashes.json", ios::binary);
+
+  // read file and decrypt, block by block
+  while (in.read(reinterpret_cast<char *>(buffer.data()), BUFFER_SIZE) || in.gcount())
+  {
+    inLength = static_cast<int>(in.gcount());
+    EVP_DecryptUpdate(cipherctx, decrypt.data(), &outLength, buffer.data(), inLength);
+    out.write(reinterpret_cast<char *>(decrypt.data()), outLength);
+  }
+
+  // authentication tag
+  EVP_CIPHER_CTX_ctrl(cipherctx, EVP_CTRL_GCM_SET_TAG, tag.size(), const_cast<unsigned char *>(tag.data()));
+  EVP_DecryptFinal_ex(cipherctx, decrypt.data(), &outLength);
+
+  // clean context
   EVP_CIPHER_CTX_free(cipherctx);
 }
 
@@ -180,15 +220,19 @@ void initializeDaemon()
   }
 }
 
-void monitor()
+void monitor(const vector<unsigned char> &key, const vector<unsigned char> &iv, vector<unsigned char> &tag)
 {
-  // TODO: longer sleep on first execution so the first daemon has time to hash all files it needs to
   ofstream log("/tmp/sentinela.log", ios::app);
+
   while (true)
   {
     sleep(60); // sleep for a minute
 
-    ifstream inFile("/home/userlinux/hashes.json");
+    // decrypt file
+    decryptJSON(key, iv, tag);
+
+    // read decrypted file
+    ifstream inFile("/tmp/hashes.json");
     json input;
     inFile >> input;
     time_t now = time(nullptr);
@@ -214,6 +258,9 @@ void monitor()
 
       log.flush();
     }
+
+    // delete decrypted file
+    remove("/tmp/hashes.json");
   }
 }
 
@@ -235,13 +282,13 @@ int main()
     exit(EXIT_SUCCESS);
   }
 
-  // pid_t pidMonitor = fork();
-  // if (pidMonitor == 0)
-  //{
-  //   initializeDaemon();
-  //   monitor();
-  //   exit(EXIT_SUCCESS);
-  // }
+  pid_t pidMonitor = fork();
+  if (pidMonitor == 0)
+  {
+    initializeDaemon();
+    monitor(key, iv, tag);
+    exit(EXIT_SUCCESS);
+  }
 
   return (0);
 }
