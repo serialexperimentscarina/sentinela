@@ -1,8 +1,9 @@
-# cd src/
+# INSTALL
 
-# sudo apt install nlohmann-json3-dev
-
-# g++ -o main main.cpp -lssl -lcrypto
+cd src/
+sudo apt install nlohmann-json3-dev
+sudo apt install libkeyutils-dev
+g++ -o main main.cpp -lssl -lcrypto -lkeyutils
 
 # TO DO:
 

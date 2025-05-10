@@ -12,6 +12,7 @@
 #include <openssl/sha.h>
 #include <openssl/rand.h>
 #include <nlohmann/json.hpp>
+#include <keyutils.h>
 #include "watchlist.hpp"
 
 using namespace std;
@@ -95,6 +96,34 @@ void decryptJSON(const vector<unsigned char> &key, const vector<unsigned char> &
 
   // clean context
   EVP_CIPHER_CTX_free(cipherctx);
+}
+
+// store credentials for encryption and decryption in the system
+void storeSecrets(const vector<unsigned char> &key, const vector<unsigned char> &iv, const vector<unsigned char> &tag)
+{
+  add_key("user", "sentinela_key", key.data(), key.size(), KEY_SPEC_USER_KEYRING);
+  add_key("user", "sentinela_tag", tag.data(), tag.size(), KEY_SPEC_USER_KEYRING);
+  add_key("user", "sentinela_iv", iv.data(), iv.size(), KEY_SPEC_USER_KEYRING);
+}
+
+// retrieve credentials for encryption and decryption in the system
+vector<unsigned char> retrieveSecrets(const string &name)
+{
+  // get size of the credential
+  key_serial_t credentialPointer = request_key("user", name.c_str(), nullptr, 0);
+  ssize_t credentialSize = keyctl_read(credentialPointer, nullptr, 0);
+
+  // retrieve credential
+  vector<unsigned char> credential(credentialSize);
+  keyctl_read(credentialPointer, reinterpret_cast<char *>(credential.data()), credentialSize);
+  return credential;
+}
+
+// check if it's the program's first execution
+bool firstExecution()
+{
+  key_serial_t key = request_key("user", "sentinela_key", nullptr, 0);
+  return (key == -1);
 }
 
 // generate hash for a file
@@ -266,29 +295,44 @@ void monitor(const vector<unsigned char> &key, const vector<unsigned char> &iv, 
 
 int main()
 {
-  vector<unsigned char> key(32); // key for encryption (32 bytes = 256 bits for AES-256)
-  vector<unsigned char> iv(12);  // iv for encryption (12 bytes = 96 bits for AES-GCM)
-  vector<unsigned char> tag(16); // tag for encryption (16 bytes = 128 bits for AES-GCM)
-
-  // randomize key and iv
-  RAND_bytes(key.data(), key.size());
-  RAND_bytes(iv.data(), iv.size());
-
-  pid_t pidSetup = fork();
-  if (pidSetup == 0)
+  if (firstExecution())
   {
-    initializeDaemon();
-    initialSetup(key, iv, tag);
-    exit(EXIT_SUCCESS);
+    cout << "this is the first execution :D\n";
+
+    vector<unsigned char> key(32); // key for encryption (32 bytes = 256 bits for AES-256)
+    vector<unsigned char> iv(12);  // iv for encryption (12 bytes = 96 bits for AES-GCM)
+    vector<unsigned char> tag(16); // tag for encryption (16 bytes = 128 bits for AES-GCM)
+
+    // randomize key and iv
+    RAND_bytes(key.data(), key.size());
+    RAND_bytes(iv.data(), iv.size());
+
+    storeSecrets(key, iv, tag);
+  }
+  else
+  {
+    cout << "this is NOT the first execution !!!\n";
+
+    auto key = retrieveSecrets("sentinela_key");
+    auto tag = retrieveSecrets("sentinela_tag");
+    auto iv = retrieveSecrets("sentinela_iv");
   }
 
-  pid_t pidMonitor = fork();
-  if (pidMonitor == 0)
-  {
-    initializeDaemon();
-    monitor(key, iv, tag);
-    exit(EXIT_SUCCESS);
-  }
+  // pid_t pidSetup = fork();
+  // if (pidSetup == 0)
+  //{
+  //   initializeDaemon();
+  //   initialSetup(key, iv, tag);
+  //   exit(EXIT_SUCCESS);
+  // }
+
+  // pid_t pidMonitor = fork();
+  // if (pidMonitor == 0)
+  //{
+  //   initializeDaemon();
+  //   monitor(key, iv, tag);
+  //   exit(EXIT_SUCCESS);
+  // }
 
   return (0);
 }
