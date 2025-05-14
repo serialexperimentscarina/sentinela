@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdlib>
+#include <filesystem>
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -90,17 +91,31 @@ void directoryTraversal(const string &path, json &output)
 // Generation of initial hash database
 void initialSetup()
 {
-  json hashFile = json::array();
+  ofstream log("/var/log/sentinela.log", ios::app);
+
+  if (filesystem::create_directory("/var/lib/sentinela/"))
+  {
+    json hashFile = json::array();
+    directoryTraversal("/home/userlinux/sentinela/src/", hashFile);
+    ofstream outFile("/var/lib/sentinela/hashes.json");
+    outFile << setw(4) << hashFile << endl;
+    outFile.close();
+
+    time_t now = time(nullptr);
+    log << "sucessfully hashed files, at: " << ctime(&now);
+  }
+  else
+  {
+    time_t now = time(nullptr);
+    log << "could not create application directory, " << ctime(&now);
+  }
+  log.flush();
+  log.close();
 
   // for (const auto &directory : watchlist)
   //{
   //   directoryTraversal(directory);
   // }
-  directoryTraversal("/home/userlinux/sentinela/src/", hashFile);
-
-  ofstream outFile("/home/userlinux/hashes.json");
-  outFile << setw(4) << hashFile << endl;
-  outFile.close();
 }
 
 void initializeDaemon()
@@ -141,12 +156,12 @@ void initializeDaemon()
 void monitor()
 {
   // TODO: longer sleep on first execution so the first daemon has time to hash all files it needs to
-  ofstream log("/tmp/sentinela.log", ios::app);
+  ofstream log("/var/log/sentinela.log", ios::app);
   while (true)
   {
     sleep(60); // Sleep for a minute
 
-    ifstream inFile("/home/userlinux/hashes.json");
+    ifstream inFile("/var/lib/sentinela/hashes.json");
     json input;
     inFile >> input;
     time_t now = time(nullptr);
@@ -175,14 +190,23 @@ void monitor()
   }
 }
 
+bool isFirstExecution()
+{
+  filesystem::path dirPath("/var/lib/sentinela");
+  return !(filesystem::exists(dirPath) && filesystem::is_directory(dirPath));
+}
+
 int main()
 {
-  pid_t pidSetup = fork();
-  if (pidSetup == 0)
+  if (isFirstExecution())
   {
-    initializeDaemon();
-    initialSetup();
-    exit(EXIT_SUCCESS);
+    pid_t pidSetup = fork();
+    if (pidSetup == 0)
+    {
+      initializeDaemon();
+      initialSetup();
+      exit(EXIT_SUCCESS);
+    }
   }
 
   pid_t pidMonitor = fork();
