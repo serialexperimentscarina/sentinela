@@ -295,10 +295,9 @@ void monitor(const vector<unsigned char> &key, const vector<unsigned char> &iv, 
 
 int main()
 {
+  // if first execution, generate credentials and encrypt files before monitoring - else, retrieve credentials and begin monitoring
   if (firstExecution())
   {
-    cout << "this is the first execution :D\n";
-
     vector<unsigned char> key(32); // key for encryption (32 bytes = 256 bits for AES-256)
     vector<unsigned char> iv(12);  // iv for encryption (12 bytes = 96 bits for AES-GCM)
     vector<unsigned char> tag(16); // tag for encryption (16 bytes = 128 bits for AES-GCM)
@@ -307,32 +306,33 @@ int main()
     RAND_bytes(key.data(), key.size());
     RAND_bytes(iv.data(), iv.size());
 
-    storeSecrets(key, iv, tag);
+    pid_t pidSetup = fork();
+    if (pidSetup == 0)
+    {
+      initializeDaemon();
+      // initial run
+      initialSetup(key, iv, tag);
+      storeSecrets(key, iv, tag);
+
+      // monitoring
+      monitor(key, iv, tag);
+      exit(EXIT_SUCCESS);
+    }
   }
   else
   {
-    cout << "this is NOT the first execution !!!\n";
+    pid_t pidMonitor = fork();
+    if (pidMonitor == 0)
+    {
+      auto key = retrieveSecrets("sentinela_key");
+      auto tag = retrieveSecrets("sentinela_tag");
+      auto iv = retrieveSecrets("sentinela_iv");
 
-    auto key = retrieveSecrets("sentinela_key");
-    auto tag = retrieveSecrets("sentinela_tag");
-    auto iv = retrieveSecrets("sentinela_iv");
+      initializeDaemon();
+      monitor(key, iv, tag);
+      exit(EXIT_SUCCESS);
+    }
   }
-
-  // pid_t pidSetup = fork();
-  // if (pidSetup == 0)
-  //{
-  //   initializeDaemon();
-  //   initialSetup(key, iv, tag);
-  //   exit(EXIT_SUCCESS);
-  // }
-
-  // pid_t pidMonitor = fork();
-  // if (pidMonitor == 0)
-  //{
-  //   initializeDaemon();
-  //   monitor(key, iv, tag);
-  //   exit(EXIT_SUCCESS);
-  // }
 
   return (0);
 }
