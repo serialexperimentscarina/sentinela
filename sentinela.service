@@ -1,0 +1,9 @@
+[Unit]
+Description=Service for the Sentinela file integrity monitoring
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/local/bin/sentinela
+
+[Install]
+WantedBy=multi-user.target

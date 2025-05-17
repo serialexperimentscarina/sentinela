@@ -118,41 +118,6 @@ void initialSetup()
   // }
 }
 
-void initializeDaemon()
-{
-  pid_t pid;
-
-  // First fork
-  pid = fork();
-
-  if (pid < 0)
-    exit(EXIT_FAILURE);
-
-  if (pid > 0)
-    exit(EXIT_SUCCESS);
-
-  if (setsid() < 0)
-    exit(EXIT_FAILURE);
-
-  // Second fork
-  pid = fork();
-
-  if (pid < 0)
-    exit(EXIT_FAILURE);
-
-  if (pid > 0)
-    exit(EXIT_SUCCESS);
-
-  umask(0);
-  chdir("/");
-
-  int x;
-  for (x = sysconf(_SC_OPEN_MAX); x >= 0; x--)
-  {
-    close(x);
-  }
-}
-
 void monitor()
 {
   // TODO: longer sleep on first execution so the first daemon has time to hash all files it needs to
@@ -200,22 +165,10 @@ int main()
 {
   if (isFirstExecution())
   {
-    pid_t pidSetup = fork();
-    if (pidSetup == 0)
-    {
-      initializeDaemon();
-      initialSetup();
-      exit(EXIT_SUCCESS);
-    }
+    initialSetup();
   }
 
-  pid_t pidMonitor = fork();
-  if (pidMonitor == 0)
-  {
-    initializeDaemon();
-    monitor();
-    exit(EXIT_SUCCESS);
-  }
+  monitor();
 
   return (0);
 }
