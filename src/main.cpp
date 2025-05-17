@@ -130,6 +130,7 @@ void monitor()
     json input;
     inFile >> input;
     time_t now = time(nullptr);
+    int discrepancies = 0;
 
     // Interate through each path on the JSON
     for (const auto &item : input)
@@ -141,17 +142,16 @@ void monitor()
       string currHash = generateChecksum(path);
 
       // Compare hashes
-      if (hash == currHash)
+      if (hash != currHash)
       {
-        log << "path: " << path << " (hashes are the same) , at: " << ctime(&now);
-      }
-      else
-      {
-        log << "path: " << path << " (HASHES ARE DIFFERENT) , at: " << ctime(&now);
+        log << "Hash discrepancies found in: " << path << " at: " << ctime(&now);
+        discrepancies++;
       }
 
       log.flush();
     }
+    log << "Check concluded with " << discrepancies << " discrepancies found, at: " << ctime(&now);
+    log.flush();
   }
 }
 
