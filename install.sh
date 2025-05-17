@@ -11,11 +11,14 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # compile binary
+echo "compiling binary..."
 sudo g++ -o sentinela ./src/main.cpp -lssl -lcrypto
 if [ $? -ne 0 ]; then
-  echo "could not compile binary."
+  echo "could not compile binary, please check for any missing dependencies."
   exit 1
 fi
+
+echo "setting up service..."
 
 # copy binary to /usr/local/bin/
 sudo cp ./sentinela /usr/local/bin/sentinela
