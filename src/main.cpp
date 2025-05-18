@@ -96,9 +96,13 @@ void initialSetup()
   if (filesystem::create_directory("/var/lib/sentinela/"))
   {
     json hashFile = json::array();
-    directoryTraversal("/home/userlinux/sentinela/src/", hashFile);
     ofstream outFile("/var/lib/sentinela/hashes.json");
-    outFile << setw(4) << hashFile << endl;
+
+    for (const auto &directory : watchlist)
+    {
+      directoryTraversal(directory, hashFile);
+      outFile << setw(4) << hashFile << endl;
+    }
     outFile.close();
 
     time_t now = time(nullptr);
@@ -111,11 +115,6 @@ void initialSetup()
   }
   log.flush();
   log.close();
-
-  // for (const auto &directory : watchlist)
-  //{
-  //   directoryTraversal(directory);
-  // }
 }
 
 void monitor()
