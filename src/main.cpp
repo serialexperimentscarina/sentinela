@@ -12,7 +12,7 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 #include <nlohmann/json.hpp>
-#include "watchlist.hpp"
+#include "toml.hpp"
 
 using namespace std;
 using json = nlohmann::json; // For JSON file serialization/deserialization
@@ -89,20 +89,25 @@ void directoryTraversal(const string &path, json &output)
 }
 
 // Generation of initial hash database
-void initialSetup()
+void initialSetup(toml::table &config)
 {
   ofstream log("/var/log/sentinela.log", ios::app);
 
   if (filesystem::create_directory("/var/lib/sentinela/"))
   {
     json hashFile = json::array();
-    ofstream outFile("/var/lib/sentinela/hashes.json");
+    auto directories = config["watchlist"].as_array();
 
-    for (const auto &directory : watchlist)
+    for (const auto &directory : *directories)
     {
-      directoryTraversal(directory, hashFile);
-      outFile << setw(4) << hashFile << endl;
+      if (auto path = directory.value<std::string>())
+      {
+        directoryTraversal(*path, hashFile);
+      }
     }
+
+    ofstream outFile("/var/lib/sentinela/hashes.json");
+    outFile << hashFile.dump(4);
     outFile.close();
 
     time_t now = time(nullptr);
@@ -119,7 +124,6 @@ void initialSetup()
 
 void monitor()
 {
-  // TODO: longer sleep on first execution so the first daemon has time to hash all files it needs to
   ofstream log("/var/log/sentinela.log", ios::app);
   while (true)
   {
@@ -160,11 +164,36 @@ bool isFirstExecution()
   return !(filesystem::exists(dirPath) && filesystem::is_directory(dirPath));
 }
 
+toml::table getConfigs()
+{
+  toml::table tbl;
+  tbl = toml::parse_file("/etc/sentinela/config.toml");
+
+  return tbl;
+}
+
 int main()
 {
+  // get configs
+  toml::table configs;
+  try
+  {
+    configs = getConfigs();
+  }
+  catch (const toml::parse_error &err)
+  {
+    ofstream log("/var/log/sentinela.log", ios::app);
+    time_t now = time(nullptr);
+    log << "could not read config file, at: " << ctime(&now);
+    log.flush();
+    log.close();
+
+    return (1);
+  }
+
   if (isFirstExecution())
   {
-    initialSetup();
+    initialSetup(configs);
   }
 
   monitor();
