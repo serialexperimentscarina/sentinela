@@ -3,13 +3,16 @@
 
 # list of files and directories to be monitored
 watchlist = [
-  "/etc/",
-  "/bin/",
-  "/usr/bin/",
-  "/sbin/",
+  "/etc",
+  "/bin",
+  "/usr/bin",
+  "/sbin",
   "/usr/sbin",
-  "/lib/",
-  "/usr/lib/",
-  "/usr/include/",
-  "/boot/"
+  "/lib",
+  "/usr/lib",
+  "/usr/include",
+  "/boot",
 ]
+
+# interval (in s) between each check
+checkInterval = 600

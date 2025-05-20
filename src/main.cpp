@@ -122,12 +122,13 @@ void initialSetup(toml::table &config)
   log.close();
 }
 
-void monitor()
+void monitor(toml::table &config)
 {
   ofstream log("/var/log/sentinela.log", ios::app);
+  auto checkInterval = config["checkInterval"].value<int>();
   while (true)
   {
-    sleep(60); // Sleep for a minute
+    sleep(*checkInterval); // Sleep for a minute
 
     ifstream inFile("/var/lib/sentinela/hashes.json");
     json input;
@@ -196,7 +197,7 @@ int main()
     initialSetup(configs);
   }
 
-  monitor();
+  monitor(configs);
 
   return (0);
 }
