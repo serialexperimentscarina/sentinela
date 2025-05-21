@@ -31,6 +31,11 @@ string generateChecksum(const string &path)
   size_t bytes;
   string finalHash;
 
+  if (!(filesystem::exists(path)))
+  {
+    return "";
+  }
+
   fp = fopen(path.c_str(), "rb");
   md = EVP_get_digestbyname("sha256");
   mdctx = EVP_MD_CTX_new();
@@ -145,8 +150,13 @@ void monitor(toml::table &config)
       // Regenerate hash
       string currHash = generateChecksum(path);
 
-      // Compare hashes
-      if (hash != currHash)
+      // Check for missing file or hash discrepancy
+      if (currHash == "")
+      {
+        log << "File missing: " << path << " at: " << ctime(&now);
+        discrepancies++;
+      }
+      else if (hash != currHash)
       {
         log << "Hash discrepancies found in: " << path << " at: " << ctime(&now);
         discrepancies++;
