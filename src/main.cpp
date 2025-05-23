@@ -69,7 +69,12 @@ void directoryTraversal(const string &path, json &output)
   if (!(dir = opendir(path.c_str())))
     return;
 
-  // Read directory
+  // Generate hash for directory
+  string hash = generateChecksum(path);
+  output.push_back({{"path", path},
+                    {"hash", hash}});
+
+  // If directory, recursively traverse it
   while ((dirent = readdir(dir)) != nullptr)
   {
     string currPath;
@@ -84,11 +89,13 @@ void directoryTraversal(const string &path, json &output)
       // Go inside this directory, list its contents as well
       directoryTraversal(currPath, output);
     }
-
-    // Generate hash
-    string hash = generateChecksum(currPath);
-    output.push_back({{"path", currPath},
-                      {"hash", hash}});
+    else
+    {
+      // Generate hash for files inside the directory
+      string hash = generateChecksum(currPath);
+      output.push_back({{"path", path},
+                        {"hash", currPath}});
+    }
   }
   closedir(dir);
 }
