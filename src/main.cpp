@@ -16,11 +16,12 @@
 
 using namespace std;
 using json = nlohmann::json; // For JSON file serialization/deserialization
+namespace fs = filesystem;
 
 #define BUFFER_SIZE 4096 // Page size (4KB)
 
 // Generate hash for a file
-string generateChecksum(const string &path)
+string generateChecksumFile(const string &path)
 {
   FILE *fp;
   const EVP_MD *md;
@@ -60,44 +61,73 @@ string generateChecksum(const string &path)
   return finalHash;
 }
 
+// Generate hash for a folder
+string generateChecksumFolder(const string &path)
+{
+  const EVP_MD *md;
+  EVP_MD_CTX *mdctx;
+  unsigned char hash[EVP_MAX_MD_SIZE];
+  unsigned int hashLength;
+  vector<string> fileVector;
+  string finalHash;
+
+  if (!(filesystem::exists(path)))
+  {
+    return "";
+  }
+
+  for (const auto &entry : fs::directory_iterator(path))
+  {
+    fileVector.push_back(entry.path().filename());
+  }
+  sort(fileVector.begin(), fileVector.end());
+  string joinedFileVector = accumulate(fileVector.begin(), fileVector.end(), string{});
+
+  md = EVP_get_digestbyname("sha256");
+  mdctx = EVP_MD_CTX_new();
+
+  EVP_DigestInit_ex(mdctx, md, NULL);
+  EVP_DigestUpdate(mdctx, joinedFileVector.data(), joinedFileVector.size());
+  EVP_DigestFinal_ex(mdctx, hash, &hashLength);
+  EVP_MD_CTX_free(mdctx);
+
+  for (int i = 0; i < hashLength; ++i)
+  {
+    char tmp[3];
+    snprintf(tmp, sizeof(tmp), "%02x", hash[i]);
+    finalHash += tmp;
+  }
+
+  return finalHash;
+}
+
 // Recursive directory traversal
 void directoryTraversal(const string &path, json &output)
 {
-  DIR *dir;
-  struct dirent *dirent;
-
-  if (!(dir = opendir(path.c_str())))
+  if (!(filesystem::exists(path)))
+  {
     return;
+  }
 
   // Generate hash for directory
-  string hash = generateChecksum(path);
-  output.push_back({{"path", path},
-                    {"hash", hash}});
+  string hash = generateChecksumFolder(path);
+  output.push_back({{"path", path}, {"type", "folder"}, {"hash", hash}});
 
-  // If directory, recursively traverse it
-  while ((dirent = readdir(dir)) != nullptr)
+  // Recursively traverse it
+  for (const auto &entry : fs::directory_iterator(path))
   {
-    string currPath;
-    currPath = path + "/" + dirent->d_name;
-
-    if (dirent->d_type == DT_DIR)
+    if (entry.is_directory())
     {
-      // Skip '.' and '..'
-      if (strcmp(dirent->d_name, ".") == 0 || strcmp(dirent->d_name, "..") == 0)
-        continue;
-
       // Go inside this directory, list its contents as well
-      directoryTraversal(currPath, output);
+      directoryTraversal(entry.path().string(), output);
     }
     else
     {
       // Generate hash for files inside the directory
-      string hash = generateChecksum(currPath);
-      output.push_back({{"path", path},
-                        {"hash", currPath}});
+      string hash = generateChecksumFile(entry.path().string());
+      output.push_back({{"path", entry.path().string()}, {"type", "file"}, {"hash", hash}});
     }
   }
-  closedir(dir);
 }
 
 // Generation of initial hash database
@@ -112,7 +142,7 @@ void initialSetup(toml::table &config)
 
     for (const auto &directory : *directories)
     {
-      if (auto path = directory.value<std::string>())
+      if (auto path = directory.value<string>())
       {
         directoryTraversal(*path, hashFile);
       }
@@ -153,9 +183,18 @@ void monitor(toml::table &config)
     {
       string path = item["path"];
       string hash = item["hash"];
+      string type = item["type"];
 
       // Regenerate hash
-      string currHash = generateChecksum(path);
+      string currHash;
+      if (type == "file")
+      {
+        currHash = generateChecksumFile(path);
+      }
+      else
+      {
+        currHash = generateChecksumFolder(path);
+      }
 
       // Check for missing file or hash discrepancy
       if (currHash == "")
