@@ -217,7 +217,7 @@ void monitor(toml::table &config)
       log.flush();
       filesChecked++;
     }
-    log << "Check concluded with " << filesChecked << "files checked, " << discrepancies << " discrepancies found, at: " << ctime(&now);
+    log << "Check concluded with " << filesChecked << " files checked, " << discrepancies << " discrepancies found, at: " << ctime(&now);
     log.flush();
   }
 }
