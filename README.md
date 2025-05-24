@@ -28,3 +28,4 @@ A configurable file integrity monitoring tool for Linux.
 ### Usage
 
 After installation, the tool will begin running as a background Linux service under the name 'sentinela.service'. The tool can be configured by making changes to the config file located in 'etc/sentinela/config.toml'.
+To uninstall, run 'uninstall.sh' from any folder
