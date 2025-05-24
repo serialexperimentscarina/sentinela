@@ -171,9 +171,12 @@ void monitor(toml::table &config)
 {
   ofstream log("/var/log/sentinela.log", ios::app);
   auto checkInterval = config["checkInterval"].value<int>();
+  int filesChecked;
+
   while (true)
   {
     sleep(*checkInterval); // Sleep for a minute
+    filesChecked = 0;
 
     ifstream inFile("/var/lib/sentinela/hashes.json");
     json input;
@@ -212,8 +215,9 @@ void monitor(toml::table &config)
       }
 
       log.flush();
+      filesChecked++;
     }
-    log << "Check concluded with " << discrepancies << " discrepancies found, at: " << ctime(&now);
+    log << "Check concluded with " << filesChecked << "files checked, " << discrepancies << " discrepancies found, at: " << ctime(&now);
     log.flush();
   }
 }
