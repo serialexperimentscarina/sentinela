@@ -102,7 +102,7 @@ string generateChecksumFolder(const string &path)
 }
 
 // Recursive directory traversal
-void directoryTraversal(const string &path, json &output)
+void directoryTraversal(const string &path, json &output, int &filesHashed)
 {
   if (!(filesystem::exists(path)))
   {
@@ -112,6 +112,7 @@ void directoryTraversal(const string &path, json &output)
   // Generate hash for directory
   string hash = generateChecksumFolder(path);
   output.push_back({{"path", path}, {"type", "folder"}, {"hash", hash}});
+  filesHashed++;
 
   // Recursively traverse it
   for (const auto &entry : fs::directory_iterator(path))
@@ -119,13 +120,14 @@ void directoryTraversal(const string &path, json &output)
     if (entry.is_directory())
     {
       // Go inside this directory, list its contents as well
-      directoryTraversal(entry.path().string(), output);
+      directoryTraversal(entry.path().string(), output, filesHashed);
     }
     else
     {
       // Generate hash for files inside the directory
       string hash = generateChecksumFile(entry.path().string());
       output.push_back({{"path", entry.path().string()}, {"type", "file"}, {"hash", hash}});
+      filesHashed++;
     }
   }
 }
@@ -134,6 +136,7 @@ void directoryTraversal(const string &path, json &output)
 void initialSetup(toml::table &config)
 {
   ofstream log("/var/log/sentinela.log", ios::app);
+  int filesHashed = 0;
 
   if (filesystem::create_directory("/var/lib/sentinela/"))
   {
@@ -144,7 +147,7 @@ void initialSetup(toml::table &config)
     {
       if (auto path = directory.value<string>())
       {
-        directoryTraversal(*path, hashFile);
+        directoryTraversal(*path, hashFile, filesHashed);
       }
     }
 
@@ -153,12 +156,12 @@ void initialSetup(toml::table &config)
     outFile.close();
 
     time_t now = time(nullptr);
-    log << "sucessfully hashed files, at: " << ctime(&now);
+    log << "sucessfully hashed " << filesHashed << " files/directories, at: " << ctime(&now);
   }
   else
   {
     time_t now = time(nullptr);
-    log << "could not create application directory, " << ctime(&now);
+    log << "could not create application directory, at: " << ctime(&now);
   }
   log.flush();
   log.close();
