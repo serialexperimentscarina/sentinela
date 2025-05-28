@@ -32,7 +32,7 @@ string generateChecksumFile(const string &path)
   size_t bytes;
   string finalHash;
 
-  if (!(filesystem::exists(path)))
+  if (!(fs::exists(path)))
   {
     return "";
   }
@@ -71,7 +71,7 @@ string generateChecksumFolder(const string &path)
   vector<string> fileVector;
   string finalHash;
 
-  if (!(filesystem::exists(path)))
+  if (!(fs::exists(path)))
   {
     return "";
   }
@@ -104,31 +104,40 @@ string generateChecksumFolder(const string &path)
 // Recursive directory traversal
 void directoryTraversal(const string &path, json &output, int &filesHashed)
 {
-  if (!(filesystem::exists(path)))
+  if (!(fs::exists(path)))
   {
     return;
   }
 
-  // Generate hash for directory
-  string hash = generateChecksumFolder(path);
-  output.push_back({{"path", path}, {"type", "folder"}, {"hash", hash}});
-  filesHashed++;
-
-  // Recursively traverse it
-  for (const auto &entry : fs::directory_iterator(path))
+  if (fs::is_directory(path))
   {
-    if (entry.is_directory())
+    // Generate hash for directory
+    string hash = generateChecksumFolder(path);
+    output.push_back({{"path", path}, {"type", "folder"}, {"hash", hash}});
+    filesHashed++;
+
+    // Recursively traverse it
+    for (const auto &entry : fs::directory_iterator(path))
     {
-      // Go inside this directory, list its contents as well
-      directoryTraversal(entry.path().string(), output, filesHashed);
+      if (entry.is_directory())
+      {
+        // Go inside this directory, list its contents as well
+        directoryTraversal(entry.path().string(), output, filesHashed);
+      }
+      else if (entry.is_regular_file()) // This skips pipes, ipc sockets, and other problematic file types
+      {
+        // Generate hash for files inside the directory
+        string hash = generateChecksumFile(entry.path().string());
+        output.push_back({{"path", entry.path().string()}, {"type", "file"}, {"hash", hash}});
+        filesHashed++;
+      }
     }
-    else if (entry.is_regular_file()) // This skips pipes, ipc sockets, and other problematic file types
-    {
-      // Generate hash for files inside the directory
-      string hash = generateChecksumFile(entry.path().string());
-      output.push_back({{"path", entry.path().string()}, {"type", "file"}, {"hash", hash}});
-      filesHashed++;
-    }
+  }
+  else if (fs::is_regular_file(path))
+  {
+    string hash = generateChecksumFile(path);
+    output.push_back({{"path", path}, {"type", "file"}, {"hash", hash}});
+    filesHashed++;
   }
 }
 
@@ -138,7 +147,7 @@ void initialSetup(toml::table &config)
   ofstream log("/var/log/sentinela.log", ios::app);
   int filesHashed = 0;
 
-  if (filesystem::create_directory("/var/lib/sentinela/"))
+  if (fs::create_directory("/var/lib/sentinela/"))
   {
     json hashFile = json::array();
     auto directories = config["watchlist"].as_array();
@@ -224,8 +233,8 @@ void monitor(toml::table &config)
 
 bool isFirstExecution()
 {
-  filesystem::path dirPath("/var/lib/sentinela");
-  return !(filesystem::exists(dirPath) && filesystem::is_directory(dirPath));
+  fs::path dirPath("/var/lib/sentinela");
+  return !(fs::exists(dirPath) && fs::is_directory(dirPath));
 }
 
 toml::table getConfigs()
