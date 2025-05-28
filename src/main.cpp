@@ -122,7 +122,7 @@ void directoryTraversal(const string &path, json &output, int &filesHashed)
       // Go inside this directory, list its contents as well
       directoryTraversal(entry.path().string(), output, filesHashed);
     }
-    else
+    else if (entry.is_regular_file()) // This skips pipes, ipc sockets, and other problematic file types
     {
       // Generate hash for files inside the directory
       string hash = generateChecksumFile(entry.path().string());
