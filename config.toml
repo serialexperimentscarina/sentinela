@@ -2,6 +2,7 @@
 # changes made in this file will be applied after reboot or daemon reloading
 
 # list of files and directories to be monitored
+# if this parameter is altered, please run the rehash function
 watchlist = [
   "/etc",
   "/bin",

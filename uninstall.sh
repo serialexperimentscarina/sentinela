@@ -4,7 +4,7 @@
 set -e
 echo "beginnings sentinela uninstallation..."
 
-# check if install script is being run as root
+# check if uninstall script is being run as root
 if [[ $EUID -ne 0 ]]; then
    echo "this script must be run as root" 
    exit 1
